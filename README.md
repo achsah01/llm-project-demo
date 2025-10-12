@@ -1,22 +1,34 @@
-\# LLM Code Deployment - Demo Project
+\# LLM Project Demo
 
 
 
-\## Summary
-
-This project demonstrates an automated workflow that generates, deploys, and updates web applications using LLMs. The system accepts JSON POST requests containing app briefs, generates minimal apps, deploys them to GitHub Pages, and reports back to an evaluation API.
+This is an auto-generated project for the LLM Code Deployment course.
 
 
 
-\## Setup
+\## Structure
 
-1\. Clone the repository:
+
+
+\- `server.py` – Flask server handling round 1 and round 2 requests.
+
+\- `generated\_app/` – Contains the auto-generated HTML app.
+
+\- `scripts/` – Placeholder for any helper scripts.
+
+\- `ngrok.exe` – Used to expose local server.
+
+
+
+\## Instructions
+
+
+
+1\. Run `server.py`:
 
 &nbsp;  ```bash
 
-&nbsp;  git clone https://github.com/achsah01/llm-project-demo.git
-
-&nbsp;  cd llm-project-demo
+&nbsp;  python server.py
 
 
 
