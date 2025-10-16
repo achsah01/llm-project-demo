@@ -1,91 +1,72 @@
 from flask import Flask, request, jsonify
 import os
-import json
-import uuid
 from git import Repo
 import requests
-from datetime import datetime
 
 app = Flask(__name__)
 
-# Path to store generated apps
-GENERATED_APP_DIR = "generated_app"
-os.makedirs(GENERATED_APP_DIR, exist_ok=True)
+SECRET = "mysecret123"
+REPO_PATH = os.path.abspath(".")
+GENERATED_APP_PATH = os.path.join(REPO_PATH, "generated_app", "index.html")
 
-# Your GitHub repository path
-REPO_PATH = os.getcwd()  # assuming repo is initialized here
-repo = Repo(REPO_PATH)
 
 @app.route("/api-endpoint", methods=["POST"])
-def api_endpoint():
+def handle_post():
+    data = request.get_json(force=True)
+    round_num = data.get("round")
+    secret = data.get("secret")
+    brief = data.get("brief", "No brief provided")
+    eval_url = data.get("evaluation_url", "")
+    task = data.get("task", "demo-task")
+
+    print(f"Received request - Task: {task}, Round: {round_num}")
+    print(f"Brief: {brief}")
+
+    # Validate secret
+    if secret != SECRET:
+        print("❌ Invalid secret received.")
+        return jsonify({"error": "Invalid secret"}), 403
+
+    # Generate HTML content based on round
+    if round_num == 1:
+        content = f"<h1>Auto-generated App - Round 1</h1><p>Brief: {brief}</p>"
+    elif round_num == 2:
+        content = f"<h1>Auto-generated App - Round 2</h1><p>Updated brief: {brief}</p><p>New features added!</p>"
+    else:
+        content = f"<h1>Unknown round</h1><p>Brief: {brief}</p>"
+
+    # Save generated HTML
+    os.makedirs(os.path.dirname(GENERATED_APP_PATH), exist_ok=True)
+    with open(GENERATED_APP_PATH, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"✅ App saved at {GENERATED_APP_PATH}")
+
+    # Commit and push to GitHub
     try:
-        data = request.get_json()
-        print(f"Received request - Task: {data.get('task')}, Round: {data.get('round')}")
-        print(f"Brief: {data.get('brief')}")
-
-        # Verify secret (replace 'mysecret123' with your actual secret)
-        if data.get("secret") != "mysecret123":
-            return jsonify({"error": "Invalid secret"}), 403
-
-        # Create/update index.html
-        round_num = data.get("round", 1)
-        index_content = f"""
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <title>Auto-generated App - Round {round_num}</title>
-        </head>
-        <body>
-            <h1>Auto-generated App</h1>
-            <p>Round {round_num}</p>
-            <p>Brief: {data.get('brief')}</p>
-            <p>New features added!</p>
-        </body>
-        </html>
-        """
-        index_path = os.path.join(GENERATED_APP_DIR, "index.html")
-        with open(index_path, "w", encoding="utf-8") as f:
-            f.write(index_content)
-        print(f"✅ App saved at {index_path}")
-
-        # Commit & push changes
+        repo = Repo(REPO_PATH)
         repo.git.add(A=True)
-        if repo.is_dirty(untracked_files=True):
-            commit_msg = f"Auto-update Round {round_num} - {datetime.now().isoformat()}"
-            commit = repo.index.commit(commit_msg)
-            origin = repo.remote(name='origin')
+        if repo.is_dirty():
+            repo.index.commit(f"Auto-update for round {round_num}")
+            origin = repo.remote(name="origin")
             origin.push()
-            commit_sha = commit.hexsha
+            print("✅ Changes pushed to GitHub")
         else:
-            commit_sha = repo.head.commit.hexsha
             print("No changes to commit.")
-
-        # Send POST to evaluation URL
-        evaluation_url = data.get("evaluation_url")
-        if evaluation_url:
-            payload = {
-                "email": data.get("email"),
-                "task": data.get("task"),
-                "round": round_num,
-                "nonce": data.get("nonce"),
-                "repo_url": repo.remotes.origin.url,
-                "commit_sha": commit_sha,
-                "pages_url": f"https://{repo.remotes.origin.url.split('/')[-2]}.github.io/{repo.working_dir.split(os.sep)[-1]}/"
-            }
-            try:
-                resp = requests.post(evaluation_url, json=payload, timeout=10)
-                print(f"Evaluation POST response: {resp.status_code} {resp.text}")
-            except Exception as e:
-                print(f"Error posting to evaluation URL: {e}")
-        else:
-            print("⚠ No evaluation URL provided.")
-
-        return jsonify({"status": "ok"}), 200
-
     except Exception as e:
-        print(f"Error processing request: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"⚠ Git error: {e}")
+
+    # POST back to evaluation URL
+    if eval_url:
+        try:
+            resp = requests.post(eval_url, json={"round": round_num, "status": "done"})
+            print(f"Evaluation POST response: {resp.status_code} {resp.text}")
+        except Exception as e:
+            print(f"⚠ Could not reach evaluation URL: {e}")
+    else:
+        print("⚠ Invalid evaluation URL.")
+
+    return jsonify({"status": "success", "round": round_num}), 200
+
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(port=5000)
